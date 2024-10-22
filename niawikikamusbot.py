@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-A bot for implementing the revision 2 of the page layout of Nias Wiktionary.
+A bot for implementing the revision 2 of the page layout of Nias Wiktionary
 
-On 7 Oct 2024 the Nias Wiki community decided to implement a new clean but more comprehensive layout called Revisi2. The definition has now its own section as well as the examples. New sections have also been added: synonyms, antonyms, etymology, etc.
+On 7 Oct 2024 the Nias Wiki community decided to implement a new clean but more comprehensive layout called Revisi2. The definition has now its own section as well as the examples. New sections have also been added: synonyms, antonyms, etymology, etc. See https://nia.wiktionary.org/wiki/Wiktionary:Monganga_afo#Angetula_rafe_komunitas_(7_Okt_24):_Ta'oguna'%C3%B6_revisi_layout_sibohou
+
 
 Use global -simulate option for test purposes. No changes to live wiki
 will be done.
-
 
 The following parameters are supported:
 
 -always           The bot won't ask for confirmation when putting a page
 
--text:            Use this text to be added; otherwise 'Test' is used
+-page             The page to work on
 
--replace:         Don't add text but replace it
-
--top              Place additional text on top of the page
+-file             The list of pages to work on
 
 -summary:         Set the action summary message for the edit.
 
@@ -42,63 +40,90 @@ from pywikibot.bot import (
 
 # Function to find the language code section
 def find_language_code(text):
-    match = re.search(r'{{(\w{2,3})}}', text)
+    # List of valid language codes
+    valid_language_codes = ['ar', 'de', 'en', 'es', 'fr', 'hu', 'id', 'it', 'jp', 'la', 'ms', 'nia', 'pt', 'sa', 'zh']
+
+    # Regular expression to find the language code inside {{ }}
+    match = re.search(r'\{\{([a-z]{2,3})\}\}', text)
+    
+    # If a match is found, check if it's in the valid language codes
     if match:
         language_code = match.group(1)
-        return language_code
+        if language_code in valid_language_codes:
+            return language_code
     return None
 
-# Function to find the pronounciation section
+# Function to find the part of speech section
 def find_famoligo_section(text):
     # Define the possible part of speech sections
     part_of_speech = ['adjektiva', 'adverbia', 'interjeksi', 'konjungsi', 'nomina', 'partikel', 'preposisi', 'pronomina', 'verba']
-        
-    # Construct the regex pattern to search for any part of speech section
-    pattern = r'{{' + ''.join(part_of_speech) + r'}}.*?$'
     
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
+    # Construct the regex pattern to search for any part of speech section
+#    pattern = r'{{(' + '|'.join(part_of_speech) + r')}}\n(.*?)(?=\n{{|$)'
+    pattern = r'{{(' + '|'.join(part_of_speech) + r')}}'
+    match_part_of_speech = re.search(pattern, text)
+    match_famoligo = re.search(r'{{famoligö}}', text)
+    match_ipa = re.search(r'({{IPA.*}})', text)
+    if match_ipa:
+        famoligo_heading = "{{famoligö}}"  # Always set to "famoligö"
+        famoligo_content = ":" + match_ipa.group().strip()
+        return famoligo_heading, famoligo_content
+    else:
         famoligo_heading = "{{famoligö}}"  # Always set to "famoligö"
         famoligo_content = ":{{IPA|ipa=|audio=}}"
         return famoligo_heading, famoligo_content
     return None, None
 
 # Function to find definition and examples
-def find_definisi_section(text):
+def find_definisi_duma_section(text):
    
-    # Splitting the entry into lines
-    lines = text.split("\n")
+    # Regex to find the {{definisi}} heading and its content
+    match_definisi = re.search(r'{{definisi}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match_duma = re.search(r'{{duma-duma}}\n(.*?)(?=\n{{|\[\[Berkas|\[\[File|\[\[Kategori|$)', text, re.DOTALL)
     
-    definitions = []
-    examples = []
-    current_definition_number = 0
+    if match_definisi and match_duma:
+        definisi_duma = match_definisi.group().strip() + "\n\n" + match_duma.group().strip()
+        return definisi_duma
+    else:
+        # Splitting the entry into lines
+        lines = text.split("\n")
     
-    for line in lines:
-        if line.startswith("# "):  # Identifying definitions
-            current_definition_number += 1
-            numbered_definition = f":{current_definition_number}. {line[2:]}"  # Replacing # with the current number
-            definitions.append(numbered_definition)
-        elif line.startswith("#*"):  # Identifying example sentences
-            # Replacing #* with the current number and using double apostrophes for italicizing
-            numbered_example = f":{current_definition_number}. {line[3:]}"
-            examples.append(numbered_example)
+        definitions = []
+        examples = []
+        current_definition_number = 0
     
-    # Generating the output with subtitles
-    output = "{{definisi}}\n" + "\n".join(definitions) + "\n\n{{duma-duma}}\n" + "\n".join(examples)
-    return output
+        for line in lines:
+            if line.startswith("# "):  # Identifying definitions
+                current_definition_number += 1
+                numbered_definition = f":{current_definition_number}. {line[2:]}"  # Replacing # with the current number
+                definitions.append(numbered_definition)
+            elif line.startswith("#*"):  # Identifying example sentences
+                # Replacing #* with the current number and using double apostrophes for italicizing
+                numbered_example = f":{current_definition_number}. {line[3:]}"
+                examples.append(numbered_example)
+    
+        # Generating the output with subtitles
+        definisi_duma = "{{definisi}}\n" + "\n".join(definitions) + "\n\n{{duma-duma}}\n" + "\n".join(examples)
+        return definisi_duma
 
 # Function to find the gambara heading and content
 def find_gambara_section(text):
-    match = re.search(r'{{gambara}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
-    if match:
+    match_gambara_heading = re.search(r'{{gambara}}', text, re.DOTALL)
+    match_berkas_content = re.search(r'(\[\[Berkas(.*?)\]\])', text, re.DOTALL)
+    match_file_content = re.search(r'(\[\[File(.*?)\]\])', text, re.DOTALL)
+    if match_berkas_content:
         gambara_heading = "{{gambara}}"
-        gambara_content = match.group(1).strip()
+        gambara_content = match_berkas_content.group().strip()
+        return gambara_heading, gambara_content
+    elif match_file_content:
+        gambara_heading = "{{gambara}}"
+        gambara_content = match_file_content.group().strip()
         return gambara_heading, gambara_content
     return None, None
 
 # Function to find the {{eluaha}} heading and content
 def find_eluaha_section(text):
-    match = re.search(r'{{eluaha}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{eluaha}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         eluaha_heading = "{{eluaha}}"
         eluaha_content = match.group(1).strip()
@@ -107,79 +132,87 @@ def find_eluaha_section(text):
 
 # Function to find the {{sinonim}} heading and content
 def find_sinonim_section(text):
-    match = re.search(r'{{sinonim}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{sinonim}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         sinonim_heading = "{{sinonim}}"
         sinonim_content = match.group(1).strip()
+        sinonim_content = sinonim_content.replace("*", ":")
         return sinonim_heading, sinonim_content
     return None, None
 
 # Function to find the {{antonim}} heading and content
 def find_antonim_section(text):
-    match = re.search(r'{{antonim}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{antonim}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         antonim_heading = "{{antonim}}"
         antonim_content = match.group(1).strip()
+        antonim_content = antonim_content.replace("*", ":")
         return antonim_heading, antonim_content
     return None, None
 
 # Function to find the {{etimologi}} heading and content
 def find_etimologi_section(text):
-    match = re.search(r'{{etimologi}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{etimologi}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         etimologi_heading = "{{etimologi}}"
         etimologi_content = match.group(1).strip()
+        etimologi_content = etimologi_content.replace("*", ":")
         return etimologi_heading, etimologi_content
     return None, None
 
 # Function to find the {{nitöngöni}} heading and content
 def find_nitongoni_section(text):
-    match = re.search(r'{{nitöngöni}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{nitöngöni}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         nitongoni_heading = "{{nitöngöni}}"
         nitongoni_content = match.group(1).strip()
+        nitongoni_content = nitongoni_content.replace("*", ":")
         return nitongoni_heading, nitongoni_content
     return None, None
 
 # Function to find the {{fakhili}} heading and content
 def find_fakhili_section(text):
-    match = re.search(r'{{fakhili}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{fakhili}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         fakhili_heading = "{{fakhili}}"
         fakhili_content = match.group(1).strip()
+        fakhili_content = fakhili_content.replace("*", ":")
         return fakhili_heading, fakhili_content
     return None, None
 
 # Function to find the {{daha}} heading and content
 def find_daha_section(text):
-    match = re.search(r'{{daha}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{daha}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         daha_heading = "{{daha}}"
         daha_content = match.group(1).strip()
+        daha_content = daha_content.replace("*", ":")
         return daha_heading, daha_content
     return None, None
 
 # Function to find the {{fakhai}} heading and content
 def find_fakhai_section(text):
-    match = re.search(r'{{fakhai}}\n(.*?)(?=\n\[\[Kategori|{{|$)', text, re.DOTALL)
+    match = re.search(r'{{fakhai}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         fakhai_heading = "{{fakhai}}"
         fakhai_content = match.group(1).strip()
+        fakhai_content = fakhai_content.replace("*", ":")
         return fakhai_heading, fakhai_content
     return None, None
 
 # Function to find the {{baero}} heading and content
 def find_baero_section(text):
-    match = re.search(r'{{baero}}\n(.*?)(?=\n{{|$)', text, re.DOTALL)
+    match = re.search(r'{{baero}}\n(.*?)(?=\n{{|\[\[Kategori|$)', text, re.DOTALL)
     if match:
         baero_heading = "{{baero}}"
         baero_content = match.group(1).strip()
+        baero_content = baero_content.replace(":", "*")
         return baero_heading, baero_content
     return None, None
 
 # Function to find the {{umbu}} heading and content
 def find_umbu_section(text):
-    match = re.search(r'{{umbu}}\n(.*?)(?=\n\[\[|$)', text, re.DOTALL)
+    match = re.search(r'{{umbu}}\n(.*?)(?=\n\[\[Kategori|$)', text, re.DOTALL)
     if match:
         umbu_heading = "{{umbu}}"
         umbu_content = match.group(1).strip()
@@ -188,10 +221,11 @@ def find_umbu_section(text):
 
 # Function to find the categories
 def find_kategori(text):
-    kategori = "\n".join([line for line in text.splitlines() if line.startswith("[[Kategori")])
+    kategori = "\n".join([line for line in text.splitlines() if line.startswith("[[Kategori")]).strip()
     return kategori
 
-class NiaWiktBot(
+
+class NiaWikikamusBot(
     # Refer pywikobot.bot for generic bot classes
     SingleSiteBot,  # A bot only working on one site
     ConfigParserBot,  # A bot which reads options from scripts.ini setting file
@@ -222,8 +256,6 @@ class NiaWiktBot(
     def treat_page(self):
         """Load the given page, do some changes, and save it."""
         text = self.current_page.text
-        #text += '\n' + self.opt.text
-        #self.put_current(text, summary=self.opt.summary)
 
         # Find the language code
         language_code = find_language_code(text)
@@ -232,7 +264,7 @@ class NiaWiktBot(
         famoligo_heading, famoligo_content = find_famoligo_section(text)
 
         # Find the definisi section
-        definisi = find_definisi_section(text)
+        definisi_duma = find_definisi_duma_section(text)
 
         # Find the gambara section
         gambara_heading, gambara_content = find_gambara_section(text)
@@ -266,7 +298,7 @@ class NiaWiktBot(
 
         # Find the umbu section
         umbu_heading, umbu_content = find_umbu_section(text)
-       
+        
         # Find the categories
         kategori = find_kategori(text)
        
@@ -280,10 +312,13 @@ class NiaWiktBot(
            
         if famoligo_heading and famoligo_content:
            updated_text += f"{famoligo_heading}\n{famoligo_content}\n\n"
-        else: updated_text += "{{famoligö}}\n{{IPA|ipa=|audio=}}\n\n"
+        else:
+            updated_text += "{{famoligö}}\n{{IPA|ipa=|audio=}}\n\n"
 
-        if definisi:
-            updated_text += f"{definisi}\n\n"
+        if definisi_duma:
+            updated_text += f"{definisi_duma}\n\n"
+        else: 
+            updated_text += "{{definisi}}\n\n{{duma-duma}}\n\n"
 
         if gambara_heading and gambara_content:
             updated_text += f"{gambara_heading}\n{gambara_content}\n\n"
@@ -341,11 +376,9 @@ class NiaWiktBot(
             updated_text += "{{umbu}}\n*Lö hadöi\n\n"           
 
         if kategori:
-            updated_text += f"{kategori}"
-        #
-        # Return the updated text
-        #return updated_text.strip()  # Remove any trailing whitespace or newlines
+            updated_text += f"{kategori}\n[[Kategori:Awena mufareso]]"
 
+        # Return the updated text
         self.put_current(updated_text.strip(), summary=self.opt.summary)
 
 def main(*args: str) -> None:
@@ -388,7 +421,7 @@ def main(*args: str) -> None:
     # check if further help is needed
     if not pywikibot.bot.suggest_help(missing_generator=not gen):
         # pass generator and private options to the bot
-        bot = NiaWiktBot(generator=gen, **options)
+        bot = NiaWikikamusBot(generator=gen, **options)
         bot.run()  # guess what it does
 
 
