@@ -108,17 +108,27 @@ def find_definisi_duma_section(text):
 
 # Function to find the gambara heading and content
 def find_gambara_section(text):
-    match_gambara_heading = re.search(r'{{gambara}}', text, re.DOTALL)
-    match_berkas_content = re.search(r'(\[\[Berkas(.*?)\]\])', text, re.DOTALL)
-    match_file_content = re.search(r'(\[\[File(.*?)\]\])', text, re.DOTALL)
-    if match_berkas_content:
+    # Find first the gallery if not skip
+    match_gallery = re.search(r'<gallery>\n(.*)</gallery>', text, re.DOTALL)
+    if match_gallery:
         gambara_heading = "{{gambara}}"
-        gambara_content = match_berkas_content.group().strip()
+        image_list = match_gallery.group(1).strip()
+        match_image = re.search(r'(.*)', image_list)
+        match_image_split = match_image.group().split("|")
+        gambara_content = "[[" + "|jmpl|".join(match_image_split) + "]]"
         return gambara_heading, gambara_content
-    elif match_file_content:
-        gambara_heading = "{{gambara}}"
-        gambara_content = match_file_content.group().strip()
-        return gambara_heading, gambara_content
+    else:
+        match_gambara_heading = re.search(r'{{gambara}}', text, re.DOTALL)
+        match_berkas_content = re.search(r'(\[\[Berkas(.*?)\]\]$)', text, re.DOTALL)
+        match_file_content = re.search(r'(\[\[File(.*?)\]\]$)', text, re.DOTALL)
+        if match_berkas_content:
+            gambara_heading = "{{gambara}}"
+            gambara_content = match_berkas_content.group().strip()
+            return gambara_heading, gambara_content
+        elif match_file_content:
+            gambara_heading = "{{gambara}}"
+            gambara_content = match_file_content.group().strip()
+            return gambara_heading, gambara_content
     return None, None
 
 # Function to find the {{eluaha}} heading and content
@@ -221,9 +231,14 @@ def find_umbu_section(text):
 
 # Function to find the categories
 def find_kategori(text):
-    kategori = "\n".join([line for line in text.splitlines() if line.startswith("[[Kategori")]).strip()
-    return kategori
-
+    existing_kategori = "\n".join([line for line in text.splitlines() if line.startswith("[[Kategori")]).strip()
+    match_kategori = re.search(r'No mufareso', existing_kategori)
+    if match_kategori:
+        kategori = existing_kategori.replace("No mufareso", "Awena mufareso")
+        return kategori
+    else:
+        kategori = f"{existing_kategori}\n[[Kategori:Awena mufareso]]"
+        return kategori
 
 class NiaWikikamusBot(
     # Refer pywikobot.bot for generic bot classes
@@ -248,7 +263,7 @@ class NiaWikikamusBot(
     summary_key = 'basic-changing'
 
     update_options = {
-        'summary': 'Bot: add the missing sections from Revisi2 (see community decision 7 Oct 24).'
+        'summary': 'Add the missing sections from Revisi2 (see community decision 7 Oct 24).'
     }
 
     #
@@ -376,7 +391,14 @@ class NiaWikikamusBot(
             updated_text += "{{umbu}}\n*Lö hadöi\n\n"           
 
         if kategori:
-            updated_text += f"{kategori}\n[[Kategori:Awena mufareso]]"
+            updated_text += f"{kategori}"
+
+        # Replace No mufareso with Awena mufareso
+#        match = re.search(r'Kategori:No mufareso', updated_text)
+#        if match:
+#            updated_text += updated_text.replace("Kategori:No mufareso", "Kategori:Awena mufareso")
+#        else:
+#            updated_text += "\n[[Kategori:Awena mufareso]]"
 
         # Return the updated text
         self.put_current(updated_text.strip(), summary=self.opt.summary)
