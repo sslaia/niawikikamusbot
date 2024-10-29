@@ -119,8 +119,8 @@ def find_gambara_section(text):
         return gambara_heading, gambara_content
     else:
         match_gambara_heading = re.search(r'{{gambara}}', text, re.DOTALL)
-        match_berkas_content = re.search(r'(\[\[Berkas(.*?)\]\]$)', text, re.DOTALL)
-        match_file_content = re.search(r'(\[\[File(.*?)\]\]$)', text, re.DOTALL)
+        match_berkas_content = re.search(r'(\[\[Berkas(.*?)\n)', text, re.DOTALL)
+        match_file_content = re.search(r'(\[\[File(.*?)\n)', text, re.DOTALL)
         if match_berkas_content:
             gambara_heading = "{{gambara}}"
             gambara_content = match_berkas_content.group().strip()
@@ -392,13 +392,6 @@ class NiaWikikamusBot(
 
         if kategori:
             updated_text += f"{kategori}"
-
-        # Replace No mufareso with Awena mufareso
-#        match = re.search(r'Kategori:No mufareso', updated_text)
-#        if match:
-#            updated_text += updated_text.replace("Kategori:No mufareso", "Kategori:Awena mufareso")
-#        else:
-#            updated_text += "\n[[Kategori:Awena mufareso]]"
 
         # Return the updated text
         self.put_current(updated_text.strip(), summary=self.opt.summary)
