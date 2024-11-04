@@ -93,14 +93,24 @@ def find_definisi_duma_section(text):
         current_definition_number = 0
     
         for line in lines:
-            if line.startswith("# "):  # Identifying definitions
-                current_definition_number += 1
-                numbered_definition = f":{current_definition_number}. {line[2:]}"  # Replacing # with the current number
-                definitions.append(numbered_definition)
-            elif line.startswith("#*"):  # Identifying example sentences
+            if line.startswith("#* "):  # Identifying example sentences
                 # Replacing #* with the current number and using double apostrophes for italicizing
                 numbered_example = f":{current_definition_number}. {line[3:]}"
                 examples.append(numbered_example)
+            # this condition added in case # sign is attached directly to definition (chinese entries)
+            elif line.startswith("#*"):  # Identifying example sentences
+                # Replacing #* with the current number and using double apostrophes for italicizing
+                numbered_example = f":{current_definition_number}. {line[2:]}"
+                examples.append(numbered_example)
+            elif line.startswith("# "):  # Identifying definitions
+                current_definition_number += 1
+                numbered_definition = f":{current_definition_number}. {line[2:]}"  # Replacing # with the current number
+                definitions.append(numbered_definition)
+            # this condition added in case # sign is attached directly to definition (chinese entries)
+            elif line.startswith("#"):  # Identifying definitions
+                current_definition_number += 1
+                numbered_definition = f":{current_definition_number}. {line[1:]}"  # Replacing # with the current number
+                definitions.append(numbered_definition)
     
         # Generating the output with subtitles
         definisi_duma = "{{definisi}}\n" + "\n".join(definitions) + "\n\n{{duma-duma}}\n" + "\n".join(examples)
@@ -239,6 +249,7 @@ def find_kategori(text):
     else:
         kategori = f"{existing_kategori}\n[[Kategori:Awena mufareso]]"
         return kategori
+#    return existing_kategori
 
 class NiaWikikamusBot(
     # Refer pywikobot.bot for generic bot classes
